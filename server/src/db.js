@@ -1,9 +1,9 @@
-import { DatabaseSync } from "node:sqlite";
+import { createClient } from "@libsql/client";
 
-export function openDb(path = ":memory:") {
-  const db = new DatabaseSync(path);
-  db.exec(`
-    PRAGMA journal_mode = WAL;
+// Works with a local file (file:money-book.db) or a free hosted Turso database (libsql://...).
+export async function openDb(url = ":memory:", authToken) {
+  const client = createClient({ url, authToken });
+  await client.executeMultiple(`
     PRAGMA foreign_keys = ON;
     CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
@@ -41,5 +41,13 @@ export function openDb(path = ":memory:") {
       monthly_limit REAL NOT NULL
     );
   `);
-  return db;
+  const plain = (row) => (row ? { ...row } : undefined);
+  return {
+    prepare: (sql) => ({
+      get: async (...args) => plain((await client.execute({ sql, args })).rows[0]),
+      all: async (...args) => (await client.execute({ sql, args })).rows.map(plain),
+      run: async (...args) => client.execute({ sql, args }),
+    }),
+    close: () => client.close(),
+  };
 }
