@@ -1,0 +1,19 @@
+{
+  "name": "money-book-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Holds Plaid keys and bank access tokens for the Money Book phone app.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch --env-file=.env src/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "plaid": "^47.0.0"
+  }
+}

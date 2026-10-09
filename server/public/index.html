@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Money Book</title>
+<meta name="theme-color" content="#f3f6f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1715" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Money Book">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js" defer></script>
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="loginForm" class="card">
+    <h1>Money Book</h1>
+    <p class="muted">Enter the app password (the <code>APP_TOKEN</code> from your server settings). This phone will remember it.</p>
+    <label for="token">App password</label>
+    <input id="token" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit">Unlock</button>
+    <p id="loginError" class="error" hidden></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <h1 id="screenTitle">Month</h1>
+    <div class="month-nav" id="monthNav">
+      <button id="prevM" aria-label="Previous month">‹</button>
+      <strong id="monthLabel"></strong>
+      <button id="nextM" aria-label="Next month">›</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="notice" class="notice" hidden></p>
+
+    <section data-screen="month">
+      <div class="tiles">
+        <div class="tile"><h3>Money in</h3><b class="num c-in" id="sIn">–</b><small>income this month</small></div>
+        <div class="tile"><h3>Spent</h3><b class="num c-spend" id="sOut">–</b><small id="sOutSub">&nbsp;</small></div>
+        <div class="tile"><h3>Saved</h3><b class="num c-save" id="sSaved">–</b><small id="sRate">&nbsp;</small></div>
+        <div class="tile"><h3>Net worth</h3><b class="num" id="sNet">–</b><small>all accounts today</small></div>
+      </div>
+      <div class="card">
+        <div class="row"><h2>Spending by category</h2><button class="link" id="editLimits">Set limits</button></div>
+        <div id="cats" class="cats"></div>
+      </div>
+      <div class="card">
+        <h2>Last 6 months</h2>
+        <div class="legend"><span class="c-spend">Spent</span><span class="c-save">Saved</span></div>
+        <div id="trend"></div>
+      </div>
+    </section>
+
+    <section data-screen="accounts" hidden>
+      <div class="stack">
+        <button class="primary" id="linkBank">Link a bank or card</button>
+        <button id="syncNow" hidden>Sync now</button>
+      </div>
+      <div id="banks" class="stack"></div>
+    </section>
+
+    <section data-screen="activity" hidden>
+      <input id="search" type="search" placeholder="Search this month" aria-label="Search this month">
+      <div class="card flush"><ul id="txList" class="tx"></ul></div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Screens">
+    <button data-tab="month" aria-current="page">Month</button>
+    <button data-tab="accounts">Accounts</button>
+    <button data-tab="activity">Activity</button>
+  </nav>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
