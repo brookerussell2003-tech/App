@@ -99,8 +99,11 @@ test("links a bank, syncs every page, and summarizes the month", async (t) => {
   assert.equal(accts.banks[0].institution, "Chase");
   assert.equal(accts.accounts.length, 3);
 
+  // Plaid refusing the removal (a test bank after switching to real banks) still unlinks it.
+  plaid.itemRemove = async () => { throw Object.assign(new Error("400"), { response: { data: { error_code: "INVALID_ACCESS_TOKEN" } } }); };
   assert.equal((await call("/api/banks/item1", { method: "DELETE" })).status, 200);
   assert.equal((await call("/api/accounts")).body.accounts.length, 0);
+  assert.equal((await call(`/api/transactions?month=${month}`)).body.transactions.length, 0);
 });
 
 test("rejects a malformed month", async (t) => {

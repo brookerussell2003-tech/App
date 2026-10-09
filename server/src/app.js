@@ -67,7 +67,12 @@ export function makeApp({ db, plaid, sealer, appToken }) {
   app.delete("/api/banks/:id", wrap(async (req, res) => {
     const item = await db.prepare("SELECT * FROM items WHERE id = ?").get(req.params.id);
     if (!item) return res.status(404).json({ error: "No bank with that id" });
-    await plaid.itemRemove({ access_token: sealer.open(item.access_token) });
+    // A link Plaid no longer recognizes (e.g. a test bank after switching to real banks) is still removed here.
+    try { await plaid.itemRemove({ access_token: sealer.open(item.access_token) }); }
+    catch (err) { console.error("Plaid itemRemove failed, removing locally anyway:", err.response?.data ?? err.message); }
+    // Deleted explicitly: hosted databases don't always honor ON DELETE CASCADE across requests.
+    await db.prepare("DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts WHERE item_id = ?)").run(item.id);
+    await db.prepare("DELETE FROM accounts WHERE item_id = ?").run(item.id);
     await db.prepare("DELETE FROM items WHERE id = ?").run(item.id);
     res.json({ removed: item.id });
   }));
