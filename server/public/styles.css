@@ -42,7 +42,12 @@ input{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);bor
 .login{min-height:100dvh;display:grid;place-items:center;padding:24px 16px}
 .login form{width:100%;max-width:380px;padding-top:22px}
 .login form::before{content:"";position:absolute;top:-8px;left:50%;width:70px;height:18px;transform:translateX(-50%) rotate(-3deg);background:var(--tape1);opacity:.85}
-.login h1{justify-self:start}
+.login h1{justify-self:center;font-size:2.4rem}
+.login form{text-align:center}
+.login label{text-align:left}
+.login .sticker{justify-self:center;width:96px;height:96px;border-radius:24px;transform:rotate(-5deg);box-shadow:2px 4px 0 var(--hl);margin-top:4px}
+.login .hello{margin:0;font:700 1.35rem/1.2 var(--display);color:var(--accent)}
+.login code{font-size:.85em;background:var(--hl);padding:0 4px;border-radius:3px}
 .login label{font:700 1.05rem var(--display);color:var(--muted)}
 #app{max-width:640px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 92px)}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-bottom:16px}
