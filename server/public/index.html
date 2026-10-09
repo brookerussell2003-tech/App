@@ -14,7 +14,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js" defer></script>
 </head>
 <body>
@@ -26,7 +26,7 @@
     <input id="token" type="password" autocomplete="current-password" required>
     <button class="primary" type="submit">Unlock</button>
     <p id="loginError" class="error" hidden></p>
-    <p class="muted version">Version 4</p>
+    <p class="muted version">Version 5</p>
   </form>
 </div>
 
@@ -71,6 +71,7 @@
 
     <section data-screen="activity" hidden>
       <input id="search" type="search" placeholder="Search this month" aria-label="Search this month">
+      <p class="muted hint">Card payments and moves between your own accounts aren't counted. Tap any transaction to stop or start counting it.</p>
       <div class="card flush"><ul id="txList" class="tx"></ul></div>
     </section>
   </main>
@@ -82,6 +83,6 @@
   </nav>
 </div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

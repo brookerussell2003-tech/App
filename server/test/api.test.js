@@ -159,3 +159,40 @@ test("/api/ping answers without the app password and shows the path it received"
     assert.deepEqual(await r.json(), { ok: true, path: "/api/ping" });
   } finally { server.close(); }
 });
+
+test("card payments, refunds and loan accounts don't inflate income or spending", async () => {
+  const { classifyAll } = await import("../src/summary.js");
+  const chk = { account_type: "depository", account_subtype: "checking", item_id: "a", counted: null };
+  const card = { account_type: "credit", account_subtype: "credit card", item_id: "b", counted: null };
+  const rows = [
+    // Card payment Plaid mislabeled on both sides: paired by amount and date.
+    { id: "p1", account_id: "chk", date: "2026-10-03", name: "CAPITAL ONE ONLINE PMT", amount: 812.5, category: "GENERAL_SERVICES", ...chk },
+    { id: "p2", account_id: "card", date: "2026-10-05", name: "PAYMENT RECEIVED", amount: -812.5, category: "INCOME", ...card },
+    // Payment to a card that isn't linked: recognized by its name.
+    { id: "p3", account_id: "chk", date: "2026-10-07", name: "DISCOVER E-PAYMENT", amount: 200, category: "LOAN_PAYMENTS", detailed: "LOAN_PAYMENTS_OTHER_PAYMENT", ...chk },
+    { id: "r1", account_id: "card", date: "2026-10-08", name: "Target refund", amount: -40, category: "GENERAL_MERCHANDISE", ...card },
+    { id: "s1", account_id: "card", date: "2026-10-08", name: "Target", amount: 90, category: "GENERAL_MERCHANDISE", ...card },
+    { id: "w1", account_id: "chk", date: "2026-10-01", name: "PAYROLL", amount: -2000, category: "INCOME", ...chk },
+    { id: "l1", account_id: "loan", date: "2026-10-09", name: "Payment received", amount: -300, category: "LOAN_PAYMENTS", account_type: "loan", item_id: "c", counted: null },
+    { id: "x1", account_id: "chk", date: "2026-10-09", name: "Venmo", amount: 25, category: "GENERAL_SERVICES", ...chk, counted: 0 },
+    { id: "t1", account_id: "fake", date: "2026-10-09", name: "Gusto pay", amount: -5850, category: "INCOME", account_type: "depository", item_id: "test", counted: null },
+  ];
+  const k = classifyAll(rows, { testItems: new Set(["test"]) });
+  assert.deepEqual(Object.fromEntries(k), {
+    p1: "card_payment", p2: "card_payment", p3: "card_payment", r1: "refund", s1: "spending",
+    w1: "income", l1: "other_account", x1: "ignored", t1: "test",
+  });
+});
+
+test("a transaction can be marked not counted, then back to automatic", async (t) => {
+  const { server, call } = await start(); t.after(() => server.close());
+  await call("/api/exchange", { method: "POST", body: JSON.stringify({ publicToken: "public-sandbox", institution: "Chase" }) });
+  assert.equal((await call(`/api/summary?month=${month}`)).body.spent, 1482.4);
+  assert.equal((await call("/api/transactions/t3", { method: "PUT", body: JSON.stringify({ counted: false }) })).status, 200);
+  assert.equal((await call(`/api/summary?month=${month}`)).body.spent, 82.4);
+  const rent = (await call(`/api/transactions?month=${month}`)).body.transactions.find((x) => x.id === "t3");
+  assert.deepEqual([rent.counted, rent.kind, rent.override], [false, "ignored", 0]);
+  await call("/api/transactions/t3", { method: "PUT", body: JSON.stringify({ counted: null }) });
+  assert.equal((await call(`/api/summary?month=${month}`)).body.spent, 1482.4);
+  assert.equal((await call("/api/transactions/t3", { method: "PUT", body: JSON.stringify({ counted: "no" }) })).status, 400);
+});

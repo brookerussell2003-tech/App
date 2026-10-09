@@ -3,11 +3,11 @@ import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { CountryCode, Products } from "plaid";
 import { syncAll, syncItem } from "./sync.js";
-import { monthSummary, netWorth, shiftMonth, CATEGORY_LABELS } from "./summary.js";
+import { monthSummary, netWorth, shiftMonth, classifiedMonth, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
 
 const MONTH = /^\d{4}-\d{2}$/;
 
-export function makeApp({ db, plaid, sealer, appToken }) {
+export function makeApp({ db, plaid, sealer, appToken, plaidEnv = "sandbox" }) {
   const app = express();
   app.use(express.json({ limit: "100kb" }));
 
@@ -34,6 +34,13 @@ export function makeApp({ db, plaid, sealer, appToken }) {
       res.status(plaidError ? 502 : 500).json({ error: plaidError?.error_message ?? "Something went wrong on the server" });
     });
 
+  // Test banks linked before switching to real banks keep their fake data; leave them out of the numbers.
+  const testItems = async () => {
+    if (plaidEnv !== "production") return new Set();
+    const items = await db.prepare("SELECT id, access_token FROM items").all();
+    return new Set(items.filter((i) => { try { return sealer.open(i.access_token).startsWith("access-sandbox"); } catch { return false; } }).map((i) => i.id));
+  };
+
   app.post("/api/link-token", wrap(async (_req, res) => {
     const { data } = await plaid.linkTokenCreate({
       user: { client_user_id: "owner" },
@@ -59,9 +66,10 @@ export function makeApp({ db, plaid, sealer, appToken }) {
   app.post("/api/sync", wrap(async (_req, res) => res.json({ results: await syncAll({ db, plaid, sealer }) })));
 
   app.get("/api/accounts", wrap(async (_req, res) => {
-    const banks = await db.prepare("SELECT id, institution, synced_at FROM items ORDER BY created_at").all();
+    const test = await testItems();
+    const banks = (await db.prepare("SELECT id, institution, synced_at FROM items ORDER BY created_at").all()).map((b) => ({ ...b, test: test.has(b.id) }));
     const accounts = await db.prepare("SELECT id, item_id, name, mask, type, subtype, current, available, currency FROM accounts ORDER BY type, name").all();
-    res.json({ banks, accounts, netWorth: await netWorth(db) });
+    res.json({ banks, accounts, netWorth: await netWorth(db, { testItems: test }) });
   }));
 
   app.delete("/api/banks/:id", wrap(async (req, res) => {
@@ -80,21 +88,32 @@ export function makeApp({ db, plaid, sealer, appToken }) {
   app.get("/api/summary", wrap(async (req, res) => {
     const month = String(req.query.month ?? new Date().toISOString().slice(0, 7));
     if (!MONTH.test(month)) return res.status(400).json({ error: "month must look like 2026-10" });
+    const opts = { testItems: await testItems() };
     const trend = await Promise.all([-5, -4, -3, -2, -1, 0].map(async (n) => {
-      const s = await monthSummary(db, shiftMonth(month, n));
+      const s = await monthSummary(db, shiftMonth(month, n), opts);
       return { month: s.month, spent: s.spent, saved: s.saved };
     }));
-    res.json({ ...(await monthSummary(db, month)), trend, netWorth: await netWorth(db) });
+    res.json({ ...(await monthSummary(db, month, opts)), trend, netWorth: await netWorth(db, opts) });
   }));
 
   app.get("/api/transactions", wrap(async (req, res) => {
     const month = String(req.query.month ?? new Date().toISOString().slice(0, 7));
     if (!MONTH.test(month)) return res.status(400).json({ error: "month must look like 2026-10" });
-    const rows = await db.prepare(`
-      SELECT t.id, t.date, t.name, t.merchant, t.amount, t.category, t.pending, a.name AS account
-      FROM transactions t JOIN accounts a ON a.id = t.account_id
-      WHERE substr(t.date, 1, 7) = ? ORDER BY t.date DESC, t.rowid DESC`).all(month);
-    res.json({ transactions: rows.map((r) => ({ ...r, pending: !!r.pending, label: CATEGORY_LABELS[r.category] ?? r.category ?? "Other" })) });
+    const rows = await classifiedMonth(db, month, { testItems: await testItems() });
+    res.json({ transactions: rows.map((r) => ({
+      id: r.id, date: r.date, name: r.name, merchant: r.merchant, amount: r.amount, category: r.category, account: r.account,
+      pending: !!r.pending, label: CATEGORY_LABELS[r.category] ?? r.category ?? "Other",
+      kind: r.kind, counted: COUNTED_KINDS.has(r.kind), why: KIND_LABELS[r.kind], override: r.counted ?? null,
+    })) });
+  }));
+
+  // Tap a transaction to stop or start counting it. counted: true, false, or null to go back to automatic.
+  app.put("/api/transactions/:id", wrap(async (req, res) => {
+    const c = req.body?.counted;
+    if (![true, false, null].includes(c)) return res.status(400).json({ error: "counted must be true, false or null" });
+    const r = await db.prepare("UPDATE transactions SET counted = ? WHERE id = ?").run(c === null ? null : c ? 1 : 0, req.params.id);
+    if (!r.rowsAffected) return res.status(404).json({ error: "No transaction with that id" });
+    res.json({ id: req.params.id, counted: c });
   }));
 
   app.get("/api/budgets", wrap(async (_req, res) => {

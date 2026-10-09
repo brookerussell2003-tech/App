@@ -19,5 +19,6 @@ export async function buildApp(rawEnv = process.env) {
     plaid: makePlaidClient({ clientId: env.PLAID_CLIENT_ID, secret: env.PLAID_SECRET, env: resolvePlaidEnv(env.PLAID_ENV) }),
     sealer: makeSealer(env.ENCRYPTION_KEY),
     appToken: env.APP_TOKEN,
+    plaidEnv: resolvePlaidEnv(env.PLAID_ENV),
   });
 }

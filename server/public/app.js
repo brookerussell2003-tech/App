@@ -136,7 +136,8 @@
     }
     $("#banks").innerHTML = banks.map((b) => `
       <div class="card">
-        <div class="row"><h2>${esc(b.institution ?? "Bank")}</h2><small class="muted">${b.synced_at ? "Synced " + new Date(b.synced_at.replace(" ", "T") + "Z").toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Not synced"}</small></div>
+        ${b.test ? `<p class="why" style="margin:0 0 8px">Test bank with fake data from Plaid's test mode. It isn't counted in your numbers. Unlink it to clear it out.</p>` : ""}
+        <div class="row"><h2>${esc(b.institution ?? "Bank")}${b.test ? " (test)" : ""}</h2><small class="muted">${b.synced_at ? "Synced " + new Date(b.synced_at.replace(" ", "T") + "Z").toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Not synced"}</small></div>
         ${accounts.filter((a) => a.item_id === b.id).map((a) => {
           const owed = a.type === "credit" || a.type === "loan";
           const bal = a.current == null ? "–" : owed ? `${money(a.current, true)} owed` : money(a.current, true);
@@ -200,11 +201,23 @@
     const rows = txCache.filter((t) => !q || `${t.merchant ?? ""} ${t.name} ${t.label}`.toLowerCase().includes(q));
     $("#txList").innerHTML = rows.length ? rows.map((t) => {
       const moneyIn = t.amount < 0; // Plaid: negative means money came in
-      return `<li><span class="d">${t.date.slice(5).replace("-", "/")}</span>
-        <span class="n">${esc(t.merchant ?? t.name)}<small>${esc(t.label)} · ${esc(t.account)}${t.pending ? " · pending" : ""}</small></span>
+      const why = t.counted && t.kind !== "refund" ? "" : `<em class="why">${esc(t.why)}</em>`;
+      return `<li data-tx="${esc(t.id)}" class="${t.counted ? "" : "skip"}" role="button" tabindex="0"><span class="d">${t.date.slice(5).replace("-", "/")}</span>
+        <span class="n">${esc(t.merchant ?? t.name)}<small>${esc(t.label)} · ${esc(t.account)}${t.pending ? " · pending" : ""}</small>${why}</span>
         <span class="a ${moneyIn ? "c-in" : ""}">${moneyIn ? "+" : "−"}${money(Math.abs(t.amount), true)}</span></li>`;
     }).join("") : `<li class="empty">Nothing in ${esc(monthName(month))}${q ? " matches" : ""}.</li>`;
   }
+  // Tap a transaction to stop counting it (or count it again). Tapping one you changed puts it back to automatic.
+  $("#txList").addEventListener("click", async (e) => {
+    const t = txCache.find((x) => x.id === e.target.closest("[data-tx]")?.dataset.tx);
+    if (!t || t.kind === "test") return;
+    const counted = t.override !== null ? null : !t.counted;
+    try {
+      await api(`/api/transactions/${encodeURIComponent(t.id)}`, { method: "PUT", body: { counted } });
+      toast(counted === null ? "Back to automatic" : counted ? "Now counted" : "Won't count this one");
+    } catch (err) { if (err.message !== "locked") notice(err.message); }
+    load();
+  });
 
   if (token) { $("#app").hidden = false; load(); } else lock();
 })();

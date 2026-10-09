@@ -43,6 +43,8 @@ export async function openDb(url = ":memory:", authToken) {
       monthly_limit REAL NOT NULL
     );
   `);
+  // Added after the first release; older databases get the column here. NULL = decide automatically.
+  try { await client.execute("ALTER TABLE transactions ADD COLUMN counted INTEGER"); } catch { /* already there */ }
   const plain = (row) => (row ? { ...row } : undefined);
   return {
     prepare: (sql) => ({

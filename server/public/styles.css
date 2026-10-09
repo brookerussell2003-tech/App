@@ -71,3 +71,8 @@ main section{display:grid;gap:14px}
 .tabbar button[aria-current="page"]{color:var(--accent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 80px);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-weight:600;font-size:.9rem;max-width:calc(100% - 32px);text-align:center}
 .version{font-size:.75rem;margin:12px 0 0;text-align:center}
+.tx li[data-tx]{cursor:pointer}
+.tx li.skip .n,.tx li.skip .a{opacity:.5}
+.tx li.skip .a{text-decoration:line-through}
+.why{display:block;font-style:normal;font-size:.75rem;color:var(--accent)}
+.hint{font-size:.8rem;margin:0 0 8px}
