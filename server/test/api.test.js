@@ -214,7 +214,7 @@ test("a transfer to another of your accounts isn't spending; what you buy from t
   assert.deepEqual(Object.fromEntries(classifyAll(rows)), { o1: "transfer", i1: "transfer", b1: "spending", pay: "income", bill: "spending" });
 });
 
-test("money from other people is income; Acorns and Fidelity withdrawals are money out", async () => {
+test("money from other people is income; Acorns is money out; Fidelity counts toward nothing", async () => {
   const { classifyAll } = await import("../src/summary.js");
   const acct = (id) => ({ account_id: id, account_type: "depository", account_subtype: "checking", item_id: id, counted: null });
   const rows = [
@@ -226,5 +226,5 @@ test("money from other people is income; Acorns and Fidelity withdrawals are mon
     { id: "o", date: "2026-10-06", name: "Online transfer to savings", amount: 100, category: "TRANSFER_OUT", ...acct("a") },
     { id: "i", date: "2026-10-06", name: "Online transfer from checking", amount: -100, category: "TRANSFER_IN", detailed: "TRANSFER_IN_ACCOUNT_TRANSFER", ...acct("b") },
   ];
-  assert.deepEqual(Object.fromEntries(classifyAll(rows)), { z: "received", v: "received", ac: "investing", fi: "investing", o: "transfer", i: "transfer" });
+  assert.deepEqual(Object.fromEntries(classifyAll(rows)), { z: "received", v: "received", ac: "investing", fi: "fidelity", o: "transfer", i: "transfer" });
 });

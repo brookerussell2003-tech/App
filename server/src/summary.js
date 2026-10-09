@@ -7,13 +7,15 @@
 //   into a credit card is never income.
 // - Income is money in that Plaid labels as income (pay, interest, benefits), plus money other
 //   people send you (Zelle, Venmo, a transfer in that doesn't come from one of your linked accounts).
-// - Money taken out to Acorns or Fidelity counts as money out, under "Investing".
+// - Money taken out to Acorns counts as money out, under "Investing".
+// - Fidelity (a set monthly contribution) counts toward nothing.
 // - Other money in (a refund) lowers spending instead of counting as income.
 // - Loan and investment accounts are left out (their balances still count toward net worth).
 // - A transaction you mark "count" or "don't count" in the app overrides all of this.
 const TRANSFER_CATEGORIES = new Set(["TRANSFER_IN", "TRANSFER_OUT"]);
 const CARD_PAYMENT = /payment|autopay|auto pay|thank you|epay|pymt|online pmt|card ?services|credit ?card/i;
-const INVESTING = /acorns|fidelity/i;
+const ACORNS = /acorns/i;
+const FIDELITY = /fidelity|fid bkg/i;
 const PEOPLE = /zelle|venmo|cash ?app|square cash|paypal|apple cash/i;
 // Transfers in that are your own money coming back, not someone paying you.
 const OWN_MONEY_IN = new Set(["TRANSFER_IN_SAVINGS", "TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS", "TRANSFER_IN_CASH_ADVANCES_AND_LOANS"]);
@@ -29,7 +31,7 @@ export const CATEGORY_LABELS = {
 
 export const KIND_LABELS = {
   income: "Counted as income", received: "Money sent to you, counted as income",
-  investing: "Investing, counted as money out", spending: "Counted as spending", refund: "Refund, lowers spending",
+  investing: "Investing, counted as money out", fidelity: "Fidelity, not counted", spending: "Counted as spending", refund: "Refund, lowers spending",
   transfer: "Between your accounts, not counted", card_payment: "Card payment, not counted",
   ignored: "You chose not to count this", other_account: "Loan or investment account, not counted",
   test: "Test bank, not counted",
@@ -46,14 +48,15 @@ export function classifyAll(rows, { testItems = new Set() } = {}) {
     TRANSFER_CATEGORIES.has(t.category) || t.category === "LOAN_PAYMENTS" && (isCard(t) || CARD_PAYMENT.test(t.name ?? "")) ||
     t.detailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" || (isCard(t) && t.amount < 0 && CARD_PAYMENT.test(t.name ?? ""));
   const text = (t) => `${t.name ?? ""} ${t.merchant ?? ""}`;
-  const isInvesting = (t) => t.amount > 0 && !isCard(t) && (INVESTING.test(text(t)) || t.detailed === "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS");
-  const fromSomeoneElse = (t) => t.amount < 0 && !isCard(t) && !INVESTING.test(text(t)) &&
+  const isFidelity = (t) => FIDELITY.test(text(t));
+  const isInvesting = (t) => t.amount > 0 && !isCard(t) && ACORNS.test(text(t));
+  const fromSomeoneElse = (t) => t.amount < 0 && !isCard(t) && !ACORNS.test(text(t)) && !isFidelity(t) &&
     (PEOPLE.test(text(t)) || t.category === "TRANSFER_IN" && !OWN_MONEY_IN.has(t.detailed));
 
   // Pair each money-out with a same-sized money-in on another of your accounts a few days apart,
   // unless the money-in is a paycheck that doesn't look like a transfer. Each transaction pairs once.
   // The transfer itself is never spending; purchases made later from the receiving account are.
-  const pairable = rows.filter((t) => t.counted == null && !testItems.has(t.item_id) && !isInvesting(t));
+  const pairable = rows.filter((t) => t.counted == null && !testItems.has(t.item_id) && !isInvesting(t) && !isFidelity(t));
   const ins = pairable.filter((t) => t.amount < 0);
   const paired = new Map(); // id -> "card_payment" | "transfer"
   for (const out of pairable.filter((t) => t.amount > 0).sort((a, b) => a.date.localeCompare(b.date))) {
@@ -72,6 +75,7 @@ export function classifyAll(rows, { testItems = new Set() } = {}) {
     else if (t.counted === 0) kind = "ignored";
     else if (t.counted === 1) kind = t.amount < 0 ? "income" : "spending";
     else if (t.account_type === "loan" || t.account_type === "investment") kind = "other_account";
+    else if (isFidelity(t)) kind = "fidelity";
     else if (isInvesting(t)) kind = "investing";
     else if (paired.has(t.id)) kind = paired.get(t.id);
     else if (fromSomeoneElse(t)) kind = "received";
