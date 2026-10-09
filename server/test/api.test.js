@@ -53,7 +53,7 @@ async function start() {
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = (path, opts = {}) => fetch(base + path, { ...opts, headers: { authorization: "Bearer test-token", "content-type": "application/json", ...opts.headers } })
     .then(async (r) => ({ status: r.status, body: await r.json() }));
-  return { db, plaid, server, call };
+  return { db, plaid, server, call, base };
 }
 
 test("rejects requests without the app token", async (t) => {
@@ -146,4 +146,13 @@ test("reads PLAID_ENV forgivingly", async () => {
   const { resolvePlaidEnv } = await import("../src/setup.js");
   for (const v of [undefined, "", "Sandbox", "sandbox ", "development", "sandbx"]) assert.equal(resolvePlaidEnv(v), "sandbox");
   for (const v of ["production", "Production", " PROD "]) assert.equal(resolvePlaidEnv(v), "production");
+});
+
+test("/api/ping answers without the app password and shows the path it received", async () => {
+  const { server, base } = await start();
+  try {
+    const r = await fetch(base + "/api/ping?x=1");
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true, path: "/api/ping" });
+  } finally { server.close(); }
 });

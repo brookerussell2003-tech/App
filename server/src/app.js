@@ -16,6 +16,9 @@ export function makeApp({ db, plaid, sealer, appToken }) {
   // The web app (add it to your iPhone home screen). Its data calls below need the app password.
   app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
 
+  // Public, harmless check that requests reach the API with their path intact (no data, no password needed).
+  app.get("/api/ping", (req, res) => res.json({ ok: true, path: req.originalUrl.split("?")[0] }));
+
   // Single-user app: the web app sends APP_TOKEN (the app password) as a bearer token on every request.
   const expected = Buffer.from(appToken);
   app.use("/api", (req, res, next) => {

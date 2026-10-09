@@ -20,8 +20,11 @@
       res = await fetch(path, {
         method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout?.(30000),
       });
-    } catch { throw new Error("Couldn't reach the server. Check your internet connection."); }
+    } catch (err) {
+      throw new Error(err.name === "TimeoutError" ? "The server took too long to answer. Try again in a minute." : "Couldn't reach the server. Check your internet connection.");
+    }
     const json = await res.json().catch(() => ({}));
     if (res.status === 401) { lock("That password didn't match. Try again."); throw new Error("locked"); }
     // A crash before the app starts comes back as a plain error page; point to the host's logs.
