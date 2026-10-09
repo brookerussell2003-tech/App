@@ -45,7 +45,7 @@ function fakePlaid() {
 }
 
 async function start() {
-  const db = openDb();
+  const db = await openDb();
   const plaid = fakePlaid();
   const app = makeApp({ db, plaid, sealer: makeSealer(randomBytes(32).toString("base64")), appToken: "test-token" });
   const server = app.listen(0);
@@ -73,7 +73,7 @@ test("links a bank, syncs every page, and summarizes the month", async (t) => {
   assert.deepEqual(plaid.calls.filter((c) => c[0] === "sync").map((c) => c[1]), [undefined, "c1"]);
 
   // Access token is stored encrypted, not in plain text.
-  const stored = db.prepare("SELECT access_token, cursor FROM items").get();
+  const stored = await db.prepare("SELECT access_token, cursor FROM items").get();
   assert.ok(!stored.access_token.includes("access-sandbox-secret"));
   assert.equal(stored.cursor, "c2");
   assert.equal(plaid.calls.find((c) => c[0] === "accounts")[1], "access-sandbox-secret");
@@ -116,4 +116,24 @@ test("serves the web app without the password, but not its data", async (t) => {
   assert.match(await page.text(), /<title>Money Book<\/title>/);
   assert.equal((await fetch(base + "/manifest.webmanifest")).status, 200);
   assert.equal((await fetch(base + "/api/summary")).status, 401);
+});
+
+test("accepts any long encryption key, not only 32-byte base64", () => {
+  const sealer = makeSealer("a-generated-value-that-is-not-base64!");
+  assert.equal(sealer.open(sealer.seal("access-sandbox-secret")), "access-sandbox-secret");
+  assert.throws(() => makeSealer("short"));
+});
+
+test("the Vercel entry point builds the app from environment variables", async (t) => {
+  const { default: handler } = await import("../api/index.js");
+  Object.assign(process.env, { PLAID_CLIENT_ID: "id", PLAID_SECRET: "secret", ENCRYPTION_KEY: "a-long-enough-secret-value", APP_TOKEN: "pw", DATABASE_URL: ":memory:" });
+  const { createServer } = await import("node:http");
+  const server = createServer(handler).listen(0);
+  t.after(() => server.close());
+  await new Promise((r) => server.once("listening", r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(base + "/health")).status, 200);
+  const s = await fetch(base + `/api/summary?month=${month}`, { headers: { authorization: "Bearer pw" } });
+  assert.equal(s.status, 200);
+  assert.equal((await s.json()).spent, 0);
 });

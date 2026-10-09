@@ -3,16 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Holds Plaid keys and bank access tokens for the Money Book phone app.",
+  "description": "Money Book: Plaid-connected budget web app and its server.",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
   },
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/index.js",
-    "dev": "node --disable-warning=ExperimentalWarning --watch --env-file=.env src/index.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+    "start": "node src/index.js",
+    "dev": "node --watch --env-file=.env src/index.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "express": "^5.2.1",
     "plaid": "^47.0.0"
   }

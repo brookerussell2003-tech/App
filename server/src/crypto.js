@@ -1,10 +1,12 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 // Plaid access tokens are as sensitive as a bank login, so they are encrypted at rest
-// with AES-256-GCM. ENCRYPTION_KEY is 32 random bytes, base64 encoded.
-export function makeSealer(base64Key) {
-  const key = Buffer.from(base64Key ?? "", "base64");
-  if (key.length !== 32) throw new Error("ENCRYPTION_KEY must be 32 bytes, base64 encoded");
+// with AES-256-GCM. ENCRYPTION_KEY is ideally 32 random bytes, base64 encoded; any other long
+// secret (such as a value a host generates for you) is stretched to 32 bytes with SHA-256.
+export function makeSealer(secret) {
+  if (!secret || secret.length < 16) throw new Error("ENCRYPTION_KEY must be at least 16 characters");
+  const decoded = Buffer.from(secret, "base64");
+  const key = decoded.length === 32 ? decoded : createHash("sha256").update(secret).digest();
   return {
     seal(text) {
       const iv = randomBytes(12);

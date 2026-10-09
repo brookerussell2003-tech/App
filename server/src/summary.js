@@ -12,9 +12,9 @@ export const CATEGORY_LABELS = {
   RENT_AND_UTILITIES: "Rent & bills", OTHER: "Other",
 };
 
-export function monthSummary(db, month) {
-  const txs = db.prepare("SELECT * FROM transactions WHERE substr(date, 1, 7) = ?").all(month);
-  const savings = new Set(db.prepare("SELECT id FROM accounts WHERE subtype IN ('savings','money market','cd','hsa') OR type = 'investment'").all().map((r) => r.id));
+export async function monthSummary(db, month) {
+  const txs = await db.prepare("SELECT * FROM transactions WHERE substr(date, 1, 7) = ?").all(month);
+  const savings = new Set((await db.prepare("SELECT id FROM accounts WHERE subtype IN ('savings','money market','cd','hsa') OR type = 'investment'").all()).map((r) => r.id));
   let income = 0, spent = 0, movedToSavings = 0;
   const byCategory = {};
   for (const t of txs) {
@@ -30,7 +30,7 @@ export function monthSummary(db, month) {
     }
   }
   const round = (n) => Math.round(n * 100) / 100;
-  const limits = Object.fromEntries(db.prepare("SELECT category, monthly_limit FROM budgets").all().map((b) => [b.category, b.monthly_limit]));
+  const limits = Object.fromEntries((await db.prepare("SELECT category, monthly_limit FROM budgets").all()).map((b) => [b.category, b.monthly_limit]));
   const categories = Object.keys({ ...byCategory, ...limits })
     .map((c) => ({ category: c, label: CATEGORY_LABELS[c] ?? c, spent: round(byCategory[c] ?? 0), limit: limits[c] ?? null }))
     .sort((a, b) => b.spent - a.spent);
@@ -43,8 +43,8 @@ export function shiftMonth(month, n) {
   return d.toISOString().slice(0, 7);
 }
 
-export function netWorth(db) {
+export async function netWorth(db) {
   // Credit cards and loans report what you owe as a positive balance.
-  const rows = db.prepare("SELECT type, current FROM accounts").all();
+  const rows = await db.prepare("SELECT type, current FROM accounts").all();
   return Math.round(rows.reduce((s, a) => s + (["credit", "loan"].includes(a.type) ? -1 : 1) * (a.current ?? 0), 0) * 100) / 100;
 }
