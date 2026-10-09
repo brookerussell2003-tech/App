@@ -1,6 +1,6 @@
 // How each transaction counts toward the month. Plaid amounts are positive for money out.
 //
-// - Money moving between your own accounts is neither spending nor income: savings transfers,
+// - Money moving between your own accounts is neither spending nor income: transfers between them,
 //   and paying off a credit card (the card purchases were already counted as spending).
 //   Plaid's labels for these vary by bank, so a payment is also recognized by its matching
 //   opposite amount in another of your accounts within a few days, and any money coming
@@ -40,14 +40,15 @@ export function classifyAll(rows, { testItems = new Set() } = {}) {
     t.detailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" || (isCard(t) && t.amount < 0 && CARD_PAYMENT.test(t.name ?? ""));
 
   // Pair each money-out with a same-sized money-in on another of your accounts a few days apart,
-  // when either side looks like a transfer or the money lands on a credit card. Each transaction pairs once.
+  // unless the money-in is a paycheck that doesn't look like a transfer. Each transaction pairs once.
+  // The transfer itself is never spending; purchases made later from the receiving account are.
   const pairable = rows.filter((t) => t.counted == null && !testItems.has(t.item_id));
   const ins = pairable.filter((t) => t.amount < 0);
   const paired = new Map(); // id -> "card_payment" | "transfer"
   for (const out of pairable.filter((t) => t.amount > 0).sort((a, b) => a.date.localeCompare(b.date))) {
     const match = ins.find((i) => !paired.has(i.id) && i.account_id !== out.account_id &&
       Math.abs(i.amount + out.amount) < 0.005 && Math.abs(dayNum(i.date) - dayNum(out.date)) <= MATCH_DAYS &&
-      (looksLikeTransfer(out) || looksLikeTransfer(i) || (isCard(i) && !isCard(out))));
+      (looksLikeTransfer(out) || looksLikeTransfer(i) || i.category !== "INCOME" || (isCard(i) && !isCard(out))));
     if (match) {
       const kind = isCard(match) || isCard(out) ? "card_payment" : "transfer";
       paired.set(match.id, kind); paired.set(out.id, kind);

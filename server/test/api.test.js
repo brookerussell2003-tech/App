@@ -196,3 +196,18 @@ test("a transaction can be marked not counted, then back to automatic", async (t
   assert.equal((await call(`/api/summary?month=${month}`)).body.spent, 1482.4);
   assert.equal((await call("/api/transactions/t3", { method: "PUT", body: JSON.stringify({ counted: "no" }) })).status, 400);
 });
+
+test("a transfer to another of your accounts isn't spending; what you buy from that account is", async () => {
+  const { classifyAll } = await import("../src/summary.js");
+  const acct = (id, sub = "checking") => ({ account_id: id, account_type: "depository", account_subtype: sub, item_id: id, counted: null });
+  const rows = [
+    // Zelle to your own account at another bank, labeled as a payment by both banks.
+    { id: "o1", date: "2026-10-02", name: "ZELLE TO BROOKE", amount: 400, category: "GENERAL_SERVICES", ...acct("a") },
+    { id: "i1", date: "2026-10-03", name: "ZELLE FROM BROOKE", amount: -400, category: "GENERAL_SERVICES", ...acct("b") },
+    { id: "b1", date: "2026-10-06", name: "Kroger", amount: 120, category: "FOOD_AND_DRINK", ...acct("b") },
+    // Paycheck the same size as an unrelated bill stays income.
+    { id: "pay", date: "2026-10-01", name: "PAYROLL", amount: -900, category: "INCOME", ...acct("a") },
+    { id: "bill", date: "2026-10-02", name: "Rent", amount: 900, category: "RENT_AND_UTILITIES", ...acct("b") },
+  ];
+  assert.deepEqual(Object.fromEntries(classifyAll(rows)), { o1: "transfer", i1: "transfer", b1: "spending", pay: "income", bill: "spending" });
+});
