@@ -5,12 +5,18 @@
 //   Plaid's labels for these vary by bank, so a payment is also recognized by its matching
 //   opposite amount in another of your accounts within a few days, and any money coming
 //   into a credit card is never income.
-// - Income is money in that Plaid labels as income (pay, interest, benefits).
+// - Income is money in that Plaid labels as income (pay, interest, benefits), plus money other
+//   people send you (Zelle, Venmo, a transfer in that doesn't come from one of your linked accounts).
+// - Money taken out to Acorns or Fidelity counts as money out, under "Investing".
 // - Other money in (a refund) lowers spending instead of counting as income.
 // - Loan and investment accounts are left out (their balances still count toward net worth).
 // - A transaction you mark "count" or "don't count" in the app overrides all of this.
 const TRANSFER_CATEGORIES = new Set(["TRANSFER_IN", "TRANSFER_OUT"]);
 const CARD_PAYMENT = /payment|autopay|auto pay|thank you|epay|pymt|online pmt|card ?services|credit ?card/i;
+const INVESTING = /acorns|fidelity/i;
+const PEOPLE = /zelle|venmo|cash ?app|square cash|paypal|apple cash/i;
+// Transfers in that are your own money coming back, not someone paying you.
+const OWN_MONEY_IN = new Set(["TRANSFER_IN_SAVINGS", "TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS", "TRANSFER_IN_CASH_ADVANCES_AND_LOANS"]);
 const MATCH_DAYS = 5;
 
 export const CATEGORY_LABELS = {
@@ -18,16 +24,17 @@ export const CATEGORY_LABELS = {
   BANK_FEES: "Bank fees", ENTERTAINMENT: "Fun", FOOD_AND_DRINK: "Food & drink", GENERAL_MERCHANDISE: "Shopping",
   HOME_IMPROVEMENT: "Home", MEDICAL: "Health", PERSONAL_CARE: "Personal care", GENERAL_SERVICES: "Services",
   GOVERNMENT_AND_NON_PROFIT: "Taxes & giving", TRANSPORTATION: "Transport", TRAVEL: "Travel",
-  RENT_AND_UTILITIES: "Rent & bills", OTHER: "Other",
+  RENT_AND_UTILITIES: "Rent & bills", INVESTING: "Investing", OTHER: "Other",
 };
 
 export const KIND_LABELS = {
-  income: "Counted as income", spending: "Counted as spending", refund: "Refund, lowers spending",
+  income: "Counted as income", received: "Money sent to you, counted as income",
+  investing: "Investing, counted as money out", spending: "Counted as spending", refund: "Refund, lowers spending",
   transfer: "Between your accounts, not counted", card_payment: "Card payment, not counted",
   ignored: "You chose not to count this", other_account: "Loan or investment account, not counted",
   test: "Test bank, not counted",
 };
-export const COUNTED_KINDS = new Set(["income", "spending", "refund"]);
+export const COUNTED_KINDS = new Set(["income", "received", "spending", "investing", "refund"]);
 
 const dayNum = (date) => Date.parse(date + "T00:00:00Z") / 86400000;
 
@@ -38,11 +45,15 @@ export function classifyAll(rows, { testItems = new Set() } = {}) {
   const looksLikeTransfer = (t) =>
     TRANSFER_CATEGORIES.has(t.category) || t.category === "LOAN_PAYMENTS" && (isCard(t) || CARD_PAYMENT.test(t.name ?? "")) ||
     t.detailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" || (isCard(t) && t.amount < 0 && CARD_PAYMENT.test(t.name ?? ""));
+  const text = (t) => `${t.name ?? ""} ${t.merchant ?? ""}`;
+  const isInvesting = (t) => t.amount > 0 && !isCard(t) && (INVESTING.test(text(t)) || t.detailed === "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS");
+  const fromSomeoneElse = (t) => t.amount < 0 && !isCard(t) && !INVESTING.test(text(t)) &&
+    (PEOPLE.test(text(t)) || t.category === "TRANSFER_IN" && !OWN_MONEY_IN.has(t.detailed));
 
   // Pair each money-out with a same-sized money-in on another of your accounts a few days apart,
   // unless the money-in is a paycheck that doesn't look like a transfer. Each transaction pairs once.
   // The transfer itself is never spending; purchases made later from the receiving account are.
-  const pairable = rows.filter((t) => t.counted == null && !testItems.has(t.item_id));
+  const pairable = rows.filter((t) => t.counted == null && !testItems.has(t.item_id) && !isInvesting(t));
   const ins = pairable.filter((t) => t.amount < 0);
   const paired = new Map(); // id -> "card_payment" | "transfer"
   for (const out of pairable.filter((t) => t.amount > 0).sort((a, b) => a.date.localeCompare(b.date))) {
@@ -61,7 +72,9 @@ export function classifyAll(rows, { testItems = new Set() } = {}) {
     else if (t.counted === 0) kind = "ignored";
     else if (t.counted === 1) kind = t.amount < 0 ? "income" : "spending";
     else if (t.account_type === "loan" || t.account_type === "investment") kind = "other_account";
+    else if (isInvesting(t)) kind = "investing";
     else if (paired.has(t.id)) kind = paired.get(t.id);
+    else if (fromSomeoneElse(t)) kind = "received";
     else if (looksLikeTransfer(t)) kind = isCard(t) || t.category === "LOAN_PAYMENTS" || t.detailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" ? "card_payment" : "transfer";
     else if (t.amount >= 0) kind = "spending";
     else kind = t.category === "INCOME" && !isCard(t) ? "income" : "refund";
@@ -89,10 +102,10 @@ export async function monthSummary(db, month, opts) {
   const byCategory = {};
   const savingsLike = (t) => ["savings", "money market", "cd", "hsa"].includes(t.account_subtype);
   for (const t of txs) {
-    if (t.kind === "income") income += -t.amount;
-    else if (t.kind === "spending" || t.kind === "refund") {
+    if (t.kind === "income" || t.kind === "received") income += -t.amount;
+    else if (t.kind === "spending" || t.kind === "refund" || t.kind === "investing") {
       spent += t.amount; // a refund is negative, so it lowers spending
-      const c = t.category ?? "OTHER";
+      const c = t.kind === "investing" ? "INVESTING" : t.category ?? "OTHER";
       byCategory[c] = (byCategory[c] ?? 0) + t.amount;
     } else if (t.kind === "transfer" && t.amount < 0 && savingsLike(t)) movedToSavings += -t.amount;
     else if (t.kind === "card_payment") {

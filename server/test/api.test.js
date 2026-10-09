@@ -213,3 +213,18 @@ test("a transfer to another of your accounts isn't spending; what you buy from t
   ];
   assert.deepEqual(Object.fromEntries(classifyAll(rows)), { o1: "transfer", i1: "transfer", b1: "spending", pay: "income", bill: "spending" });
 });
+
+test("money from other people is income; Acorns and Fidelity withdrawals are money out", async () => {
+  const { classifyAll } = await import("../src/summary.js");
+  const acct = (id) => ({ account_id: id, account_type: "depository", account_subtype: "checking", item_id: id, counted: null });
+  const rows = [
+    { id: "z", date: "2026-10-02", name: "ZELLE FROM JORDAN", amount: -60, category: "TRANSFER_IN", detailed: "TRANSFER_IN_ACCOUNT_TRANSFER", ...acct("a") },
+    { id: "v", date: "2026-10-03", name: "VENMO CASHOUT", amount: -25, category: "GENERAL_SERVICES", ...acct("a") },
+    { id: "ac", date: "2026-10-04", name: "Acorns Invest", amount: 5, category: "TRANSFER_OUT", detailed: "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS", ...acct("a") },
+    { id: "fi", date: "2026-10-05", name: "FID BKG SVC LLC MONEYLINE", merchant: "Fidelity", amount: 200, category: "TRANSFER_OUT", ...acct("a") },
+    // Your own money between linked accounts still isn't income.
+    { id: "o", date: "2026-10-06", name: "Online transfer to savings", amount: 100, category: "TRANSFER_OUT", ...acct("a") },
+    { id: "i", date: "2026-10-06", name: "Online transfer from checking", amount: -100, category: "TRANSFER_IN", detailed: "TRANSFER_IN_ACCOUNT_TRANSFER", ...acct("b") },
+  ];
+  assert.deepEqual(Object.fromEntries(classifyAll(rows)), { z: "received", v: "received", ac: "investing", fi: "investing", o: "transfer", i: "transfer" });
+});
