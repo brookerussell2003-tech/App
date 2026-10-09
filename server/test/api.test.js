@@ -219,6 +219,7 @@ test("a transfer to another of your accounts isn't spending; what you buy from t
     { id: "bill", date: "2026-10-02", name: "Rent", amount: 900, category: "RENT_AND_UTILITIES", ...acct("b") },
   ];
   assert.deepEqual(Object.fromEntries(classifyAll(rows)), { o1: "transfer", i1: "transfer", b1: "spending", pay: "income", bill: "spending" });
+  assert.deepEqual([...classifyAll(rows).internal].sort(), ["i1", "o1"]);
 });
 
 test("money from other people is income; Acorns is money out; Fidelity counts toward nothing", async () => {

@@ -9,7 +9,7 @@
 
   let token = null;
   try { token = localStorage.getItem("moneybook-token"); } catch {}
-  let month = thisMonth(), screen = "month", editing = false, confirmRemove = null, txCache = [];
+  let month = thisMonth(), screen = "month", editing = false, confirmRemove = null, txCache = [], showInternal = false;
 
   function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2600); }
   function notice(msg) { $("#notice").textContent = msg ?? ""; $("#notice").hidden = !msg; }
@@ -208,7 +208,12 @@
   $("#search").addEventListener("input", renderTx);
   function renderTx() {
     const q = $("#search").value.trim().toLowerCase();
-    const rows = txCache.filter((t) => !q || `${t.merchant ?? ""} ${t.name} ${t.label}`.toLowerCase().includes(q));
+    const matches = txCache.filter((t) => !q || `${t.merchant ?? ""} ${t.name} ${t.label}`.toLowerCase().includes(q));
+    // Money moving between your own linked accounts is hidden unless you ask to see it.
+    const hidden = matches.filter((t) => t.internal).length;
+    const rows = showInternal ? matches : matches.filter((t) => !t.internal);
+    $("#showInternal").hidden = !hidden;
+    $("#showInternal").textContent = showInternal ? "Hide moves between your accounts" : `Show ${hidden} move${hidden === 1 ? "" : "s"} between your accounts`;
     $("#txList").innerHTML = rows.length ? rows.map((t) => {
       const moneyIn = t.amount < 0; // Plaid: negative means money came in
       const why = t.counted && t.kind !== "refund" ? "" : `<em class="why">${esc(t.why)}</em>`;
@@ -217,6 +222,7 @@
         <span class="a ${moneyIn ? "c-in" : ""}">${moneyIn ? "+" : "−"}${money(Math.abs(t.amount), true)}</span></li>`;
     }).join("") : `<li class="empty">Nothing in ${esc(monthName(month))}${q ? " matches" : ""}.</li>`;
   }
+  $("#showInternal").onclick = () => { showInternal = !showInternal; renderTx(); };
   // Tap a transaction to stop counting it (or count it again). Tapping one you changed puts it back to automatic.
   $("#txList").addEventListener("click", async (e) => {
     const t = txCache.find((x) => x.id === e.target.closest("[data-tx]")?.dataset.tx);

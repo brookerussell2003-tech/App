@@ -80,3 +80,4 @@ main section{display:grid;gap:14px}
 .acct-wrap{padding:6px 0}
 .savetag{margin-top:4px;font-size:.72rem;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted)}
 .savetag.on{border-color:var(--save);color:var(--save)}
+.linkish{display:block;margin:10px auto 0;background:none;border:0;color:var(--accent);font-size:.85rem;text-decoration:underline}

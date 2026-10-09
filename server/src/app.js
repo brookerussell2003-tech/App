@@ -116,6 +116,7 @@ export function makeApp({ db, plaid, sealer, appToken, plaidEnv = "sandbox" }) {
       id: r.id, date: r.date, name: r.name, merchant: r.merchant, amount: r.amount, category: r.category, account: r.account,
       pending: !!r.pending, label: CATEGORY_LABELS[r.category] ?? r.category ?? "Other",
       kind: r.kind, counted: COUNTED_KINDS.has(r.kind), why: KIND_LABELS[r.kind], override: r.counted ?? null,
+      internal: r.internal,
     })) });
   }));
 

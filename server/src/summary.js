@@ -84,6 +84,8 @@ export function classifyAll(rows, { testItems = new Set() } = {}) {
     else kind = t.category === "INCOME" && !isCard(t) ? "income" : "refund";
     kinds.set(t.id, kind);
   }
+  // Both sides seen in your linked accounts: money that never left you. Activity hides these.
+  kinds.internal = new Set([...paired.keys()].filter((id) => ["transfer", "card_payment"].includes(kinds.get(id))));
   return kinds;
 }
 
@@ -97,7 +99,7 @@ export async function classifiedMonth(db, month, opts) {
     FROM transactions t JOIN accounts a ON a.id = t.account_id
     WHERE t.date BETWEEN ? AND ? ORDER BY t.date DESC, t.rowid DESC`).all(from, to);
   const kinds = classifyAll(rows, opts);
-  return rows.filter((t) => t.date.startsWith(month)).map((t) => ({ ...t, kind: kinds.get(t.id) }));
+  return rows.filter((t) => t.date.startsWith(month)).map((t) => ({ ...t, kind: kinds.get(t.id), internal: kinds.internal.has(t.id) }));
 }
 
 export async function monthSummary(db, month, opts) {
