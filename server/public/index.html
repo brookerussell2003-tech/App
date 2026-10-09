@@ -14,7 +14,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="styles.css?v=9">
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js" defer></script>
 </head>
 <body>
@@ -26,7 +26,7 @@
     <input id="token" type="password" autocomplete="current-password" required>
     <button class="primary" type="submit">Unlock</button>
     <p id="loginError" class="error" hidden></p>
-    <p class="muted version">Version 8</p>
+    <p class="muted version">Version 9</p>
   </form>
 </div>
 
@@ -49,6 +49,7 @@
         <div class="tile"><h3>Spent</h3><b class="num c-spend" id="sOut">–</b><small id="sOutSub">&nbsp;</small></div>
         <div class="tile"><h3>Saved</h3><b class="num c-save" id="sSaved">–</b><small id="sRate">&nbsp;</small></div>
         <div class="tile"><h3>Net worth</h3><b class="num" id="sNet">–</b><small>all accounts today</small></div>
+        <div class="tile wide"><h3>Total savings</h3><b class="num c-save" id="sSavings">–</b><small>Axos and savings accounts today</small></div>
         <div class="tile"><h3>Paid to cards</h3><b class="num" id="sCards">–</b><small>bills paid, already in Spent</small></div>
         <div class="tile"><h3>Cards owed</h3><b class="num c-spend" id="sOwed">–</b><small>current card balances</small></div>
       </div>
@@ -85,6 +86,6 @@
   </nav>
 </div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

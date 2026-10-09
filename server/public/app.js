@@ -87,6 +87,7 @@
     $("#sNet").textContent = money(s.netWorth);
     $("#sCards").textContent = money(s.cardPayments);
     $("#sOwed").textContent = money(s.cardsOwed);
+    $("#sSavings").textContent = money(s.totalSavings);
     $("#editLimits").textContent = editing ? "Done" : "Set limits";
 
     if (!s.categories.length) $("#cats").innerHTML = `<p class="muted">No spending in ${esc(monthName(month))} yet. Link a bank on the Accounts tab.</p>`;
@@ -143,12 +144,19 @@
         ${accounts.filter((a) => a.item_id === b.id).map((a) => {
           const owed = a.type === "credit" || a.type === "loan";
           const bal = a.current == null ? "–" : owed ? `${money(a.current, true)} owed` : money(a.current, true);
-          return `<div class="acct"><div>${esc(a.name)}${a.mask ? ` ••${esc(a.mask)}` : ""}<small>${esc(a.subtype ?? a.type)}</small></div><b class="${owed ? "c-spend" : ""}">${bal}</b></div>`;
+          const tag = a.type === "depository" ? `<button class="savetag ${a.savings ? "on" : ""}" data-savings="${esc(a.id)}" data-on="${a.savings ? 1 : 0}">${a.savings ? "✓ In total savings" : "Add to total savings"}</button>` : "";
+          return `<div class="acct-wrap"><div class="acct"><div>${esc(a.name)}${a.mask ? ` ••${esc(a.mask)}` : ""}<small>${esc(a.subtype ?? a.type)}</small></div><b class="${owed ? "c-spend" : ""}">${bal}</b></div>${tag}</div>`;
         }).join("")}
         <button class="danger" data-remove="${esc(b.id)}">${confirmRemove === b.id ? "Tap again to unlink and delete its data" : "Unlink"}</button>
       </div>`).join("");
   }
   $("#banks").addEventListener("click", async (e) => {
+    const sv = e.target.closest("[data-savings]");
+    if (sv) {
+      try { await api(`/api/accounts/${encodeURIComponent(sv.dataset.savings)}`, { method: "PUT", body: { savings: sv.dataset.on !== "1" } }); }
+      catch (err) { if (err.message !== "locked") notice(err.message); }
+      return load();
+    }
     const id = e.target.closest("[data-remove]")?.dataset.remove;
     if (!id) return;
     if (confirmRemove !== id) { confirmRemove = id; load(); return; }

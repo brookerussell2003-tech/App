@@ -45,6 +45,7 @@ export async function openDb(url = ":memory:", authToken) {
   `);
   // Added after the first release; older databases get the column here. NULL = decide automatically.
   try { await client.execute("ALTER TABLE transactions ADD COLUMN counted INTEGER"); } catch { /* already there */ }
+  try { await client.execute("ALTER TABLE accounts ADD COLUMN is_savings INTEGER"); } catch { /* already there */ }
   const plain = (row) => (row ? { ...row } : undefined);
   return {
     prepare: (sql) => ({

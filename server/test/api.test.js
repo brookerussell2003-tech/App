@@ -86,6 +86,13 @@ test("links a bank, syncs every page, and summarizes the month", async (t) => {
   assert.equal(s.netWorth, 1200 + 5000 - 410);
   assert.equal(s.cardPayments, 500);       // shown on its own, not added to spending
   assert.equal(s.cardsOwed, 410);
+  assert.equal(s.totalSavings, 5000);      // the savings account
+
+  // Pick which accounts make up total savings.
+  assert.equal((await call("/api/accounts/chk", { method: "PUT", body: JSON.stringify({ savings: true }) })).status, 200);
+  assert.equal((await call(`/api/summary?month=${month}`)).body.totalSavings, 6200);
+  assert.equal((await call("/api/accounts")).body.accounts.find((a) => a.id === "chk").savings, true);
+  await call("/api/accounts/chk", { method: "PUT", body: JSON.stringify({ savings: null }) });
   assert.equal(s.trend.length, 6);
   assert.equal(s.categories[0].category, "RENT_AND_UTILITIES");
 
@@ -227,4 +234,11 @@ test("money from other people is income; Acorns is money out; Fidelity counts to
     { id: "i", date: "2026-10-06", name: "Online transfer from checking", amount: -100, category: "TRANSFER_IN", detailed: "TRANSFER_IN_ACCOUNT_TRANSFER", ...acct("b") },
   ];
   assert.deepEqual(Object.fromEntries(classifyAll(rows)), { z: "received", v: "received", ac: "investing", fi: "fidelity", o: "transfer", i: "transfer" });
+});
+
+test("anything at Axos counts toward total savings automatically", async () => {
+  const { isSavingsAccount } = await import("../src/summary.js");
+  assert.equal(isSavingsAccount({ type: "depository", subtype: "checking", institution: "Axos Bank", is_savings: null }), true);
+  assert.equal(isSavingsAccount({ type: "depository", subtype: "checking", institution: "Chase", is_savings: null }), false);
+  assert.equal(isSavingsAccount({ type: "depository", subtype: "checking", institution: "Axos Bank", is_savings: 0 }), false);
 });

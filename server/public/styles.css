@@ -76,3 +76,7 @@ main section{display:grid;gap:14px}
 .tx li.skip .a{text-decoration:line-through}
 .why{display:block;font-style:normal;font-size:.75rem;color:var(--accent)}
 .hint{font-size:.8rem;margin:0 0 8px}
+.tile.wide{grid-column:1/-1}
+.acct-wrap{padding:6px 0}
+.savetag{margin-top:4px;font-size:.72rem;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted)}
+.savetag.on{border-color:var(--save);color:var(--save)}

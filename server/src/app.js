@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { CountryCode, Products } from "plaid";
 import { syncAll, syncItem } from "./sync.js";
-import { monthSummary, netWorth, cardsOwed, shiftMonth, classifiedMonth, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
+import { monthSummary, netWorth, cardsOwed, totalSavings, isSavingsAccount, shiftMonth, classifiedMonth, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
 
 const MONTH = /^\d{4}-\d{2}$/;
 
@@ -68,8 +68,20 @@ export function makeApp({ db, plaid, sealer, appToken, plaidEnv = "sandbox" }) {
   app.get("/api/accounts", wrap(async (_req, res) => {
     const test = await testItems();
     const banks = (await db.prepare("SELECT id, institution, synced_at FROM items ORDER BY created_at").all()).map((b) => ({ ...b, test: test.has(b.id) }));
-    const accounts = await db.prepare("SELECT id, item_id, name, mask, type, subtype, current, available, currency FROM accounts ORDER BY type, name").all();
+    const accounts = (await db.prepare(`
+      SELECT a.id, a.item_id, a.name, a.mask, a.type, a.subtype, a.current, a.available, a.currency, a.is_savings, i.institution
+      FROM accounts a JOIN items i ON i.id = a.item_id ORDER BY a.type, a.name`).all())
+      .map(({ is_savings, institution, ...a }) => ({ ...a, savings: isSavingsAccount({ ...a, is_savings, institution }) }));
     res.json({ banks, accounts, netWorth: await netWorth(db, { testItems: test }) });
+  }));
+
+  // Choose which accounts make up "Total savings". savings: true, false, or null for automatic.
+  app.put("/api/accounts/:id", wrap(async (req, res) => {
+    const v = req.body?.savings;
+    if (![true, false, null].includes(v)) return res.status(400).json({ error: "savings must be true, false or null" });
+    const r = await db.prepare("UPDATE accounts SET is_savings = ? WHERE id = ?").run(v === null ? null : v ? 1 : 0, req.params.id);
+    if (!r.rowsAffected) return res.status(404).json({ error: "No account with that id" });
+    res.json({ id: req.params.id, savings: v });
   }));
 
   app.delete("/api/banks/:id", wrap(async (req, res) => {
@@ -93,7 +105,7 @@ export function makeApp({ db, plaid, sealer, appToken, plaidEnv = "sandbox" }) {
       const s = await monthSummary(db, shiftMonth(month, n), opts);
       return { month: s.month, spent: s.spent, saved: s.saved };
     }));
-    res.json({ ...(await monthSummary(db, month, opts)), trend, netWorth: await netWorth(db, opts), cardsOwed: await cardsOwed(db, opts) });
+    res.json({ ...(await monthSummary(db, month, opts)), trend, netWorth: await netWorth(db, opts), cardsOwed: await cardsOwed(db, opts), totalSavings: await totalSavings(db, opts) });
   }));
 
   app.get("/api/transactions", wrap(async (req, res) => {

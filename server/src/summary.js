@@ -133,6 +133,15 @@ export function shiftMonth(month, n) {
   return d.toISOString().slice(0, 7);
 }
 
+// Savings accounts (and anything at Axos, where the savings live) unless you've changed it on the Accounts tab.
+export const isSavingsAccount = (a) =>
+  a.is_savings != null ? a.is_savings === 1 : a.type === "depository" && (["savings", "money market", "cd"].includes(a.subtype) || /axos/i.test(a.institution ?? ""));
+
+export async function totalSavings(db, { testItems = new Set() } = {}) {
+  const rows = await db.prepare("SELECT a.item_id, a.type, a.subtype, a.current, a.is_savings, i.institution FROM accounts a JOIN items i ON i.id = a.item_id").all();
+  return Math.round(rows.filter((a) => !testItems.has(a.item_id) && isSavingsAccount(a)).reduce((s, a) => s + (a.current ?? 0), 0) * 100) / 100;
+}
+
 export async function cardsOwed(db, { testItems = new Set() } = {}) {
   const rows = (await db.prepare("SELECT item_id, current FROM accounts WHERE type = 'credit'").all()).filter((a) => !testItems.has(a.item_id));
   return Math.round(rows.reduce((s, a) => s + (a.current ?? 0), 0) * 100) / 100;
