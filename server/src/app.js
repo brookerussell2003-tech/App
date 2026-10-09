@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { CountryCode, Products } from "plaid";
 import { syncAll, syncItem } from "./sync.js";
-import { monthSummary, netWorth, cardsOwed, totalSavings, isSavingsAccount, shiftMonth, classifiedMonth, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
+import { monthSummary, netWorth, cardsOwed, totalSavings, isSavingsAccount, shiftMonth, classifiedMonth, displayName, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
 
 const MONTH = /^\d{4}-\d{2}$/;
 
@@ -113,7 +113,7 @@ export function makeApp({ db, plaid, sealer, appToken, plaidEnv = "sandbox" }) {
     if (!MONTH.test(month)) return res.status(400).json({ error: "month must look like 2026-10" });
     const rows = await classifiedMonth(db, month, { testItems: await testItems() });
     res.json({ transactions: rows.map((r) => ({
-      id: r.id, date: r.date, name: r.name, merchant: r.merchant, amount: r.amount, category: r.category, account: r.account,
+      id: r.id, date: r.date, name: displayName(r), merchant: null, amount: r.amount, category: r.category, account: r.account,
       pending: !!r.pending, label: CATEGORY_LABELS[r.category] ?? r.category ?? "Other",
       kind: r.kind, counted: COUNTED_KINDS.has(r.kind), why: KIND_LABELS[r.kind], override: r.counted ?? null,
       internal: r.internal,

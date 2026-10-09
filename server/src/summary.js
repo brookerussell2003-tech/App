@@ -38,6 +38,11 @@ export const KIND_LABELS = {
 };
 export const COUNTED_KINDS = new Set(["income", "received", "spending", "investing", "refund"]);
 
+// Nicotine purchases are shown simply as "Purchase" (Brooke's choice); they still count as spending.
+const NICOTINE = /\b(vap(e|or|our)|smoke ?shop|tobacc|cigar|juul|zyn\b|vuse|njoy|nicotine|hookah|e-?cig|elf ?bar|geek ?bar|lost ?mary|puff ?bar|skoal|marlboro)/i;
+export const displayName = (t) =>
+  t.detailed === "GENERAL_MERCHANDISE_TOBACCO_AND_VAPE" || NICOTINE.test(`${t.name ?? ""} ${t.merchant ?? ""}`) ? "Purchase" : t.merchant ?? t.name;
+
 const dayNum = (date) => Date.parse(date + "T00:00:00Z") / 86400000;
 
 // rows: transactions joined with their account's type, subtype and item_id.

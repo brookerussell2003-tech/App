@@ -243,3 +243,12 @@ test("anything at Axos counts toward total savings automatically", async () => {
   assert.equal(isSavingsAccount({ type: "depository", subtype: "checking", institution: "Chase", is_savings: null }), false);
   assert.equal(isSavingsAccount({ type: "depository", subtype: "checking", institution: "Axos Bank", is_savings: 0 }), false);
 });
+
+test("nicotine purchases show as \"Purchase\" and still count as spending", async () => {
+  const { displayName } = await import("../src/summary.js");
+  assert.equal(displayName({ name: "SQ *CLOUD 9 VAPE SHOP", merchant: null }), "Purchase");
+  assert.equal(displayName({ name: "7-ELEVEN 1234", merchant: "7-Eleven", detailed: "GENERAL_MERCHANDISE_TOBACCO_AND_VAPE" }), "Purchase");
+  assert.equal(displayName({ name: "ZYN REWARDS", merchant: null }), "Purchase");
+  assert.equal(displayName({ name: "TRADER JOE'S #552", merchant: "Trader Joe's" }), "Trader Joe's");
+  assert.equal(displayName({ name: "ZYNGA GAMES", merchant: null }), "ZYNGA GAMES");
+});
