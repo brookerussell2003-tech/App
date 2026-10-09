@@ -1,7 +1,9 @@
-import { createClient } from "@libsql/client";
-
 // Works with a local file (file:money-book.db) or a free hosted Turso database (libsql://...).
+// A hosted database uses the pure-JavaScript client: the default one loads a native SQLite
+// binary that Vercel's functions don't include, which crashes the whole server.
 export async function openDb(url = ":memory:", authToken) {
+  const remote = /^(libsql|https?|wss?):/.test(url);
+  const { createClient } = remote ? await import("@libsql/client/web") : await import("@libsql/client");
   const client = createClient({ url, authToken });
   await client.executeMultiple(`
     PRAGMA foreign_keys = ON;
