@@ -126,7 +126,7 @@ test("accepts any long encryption key, not only 32-byte base64", () => {
 
 test("the Vercel entry point builds the app from environment variables", async (t) => {
   const { default: handler } = await import("../api/index.js");
-  Object.assign(process.env, { PLAID_CLIENT_ID: "id", PLAID_SECRET: "secret", ENCRYPTION_KEY: "a-long-enough-secret-value", APP_TOKEN: "pw", DATABASE_URL: ":memory:" });
+  Object.assign(process.env, { PLAID_CLIENT_ID: "id", PLAID_SECRET: "secret", ENCRYPTION_KEY: "a-long-enough-secret-value", APP_TOKEN: "pw", DATABASE_URL: ":memory:", PLAID_ENV: " Sandbox " });
   const { createServer } = await import("node:http");
   const server = createServer(handler).listen(0);
   t.after(() => server.close());
