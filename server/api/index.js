@@ -14,7 +14,8 @@ export default async function handler(req, res) {
   if (req.url.startsWith("/health")) {
     const settings = Object.fromEntries(SETTINGS.map((k) => [k, process.env[k] ? "set" : "missing"]));
     try {
-      const { buildApp } = await import("../src/setup.js");
+      const { buildApp, resolvePlaidEnv } = await import("../src/setup.js");
+      settings.plaidMode = resolvePlaidEnv(process.env.PLAID_ENV);
       app ??= await buildApp();
       return send(res, 200, { ok: true, settings });
     } catch (err) {

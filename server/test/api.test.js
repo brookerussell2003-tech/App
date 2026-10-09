@@ -126,7 +126,7 @@ test("accepts any long encryption key, not only 32-byte base64", () => {
 
 test("the Vercel entry point builds the app from environment variables", async (t) => {
   const { default: handler } = await import("../api/index.js");
-  Object.assign(process.env, { PLAID_CLIENT_ID: "id", PLAID_SECRET: "secret", ENCRYPTION_KEY: "a-long-enough-secret-value", APP_TOKEN: "pw", DATABASE_URL: ":memory:", PLAID_ENV: " Sandbox " });
+  Object.assign(process.env, { PLAID_CLIENT_ID: "id", PLAID_SECRET: "secret", ENCRYPTION_KEY: "a-long-enough-secret-value", APP_TOKEN: "pw", DATABASE_URL: ":memory:", PLAID_ENV: " Development " });
   const { createServer } = await import("node:http");
   const server = createServer(handler).listen(0);
   t.after(() => server.close());
@@ -135,8 +135,15 @@ test("the Vercel entry point builds the app from environment variables", async (
   const health = await (await fetch(base + "/health")).json();
   assert.equal(health.ok, true);
   assert.equal(health.settings.PLAID_SECRET, "set");
+  assert.equal(health.settings.plaidMode, "sandbox");
   assert.ok(!JSON.stringify(health).includes("secret"));
   const s = await fetch(base + `/api/summary?month=${month}`, { headers: { authorization: "Bearer pw" } });
   assert.equal(s.status, 200);
   assert.equal((await s.json()).spent, 0);
+});
+
+test("reads PLAID_ENV forgivingly", async () => {
+  const { resolvePlaidEnv } = await import("../src/setup.js");
+  for (const v of [undefined, "", "Sandbox", "sandbox ", "development", "sandbx"]) assert.equal(resolvePlaidEnv(v), "sandbox");
+  for (const v of ["production", "Production", " PROD "]) assert.equal(resolvePlaidEnv(v), "production");
 });
