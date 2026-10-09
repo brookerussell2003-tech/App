@@ -84,6 +84,8 @@ test("links a bank, syncs every page, and summarizes the month", async (t) => {
   assert.equal(s.saved, 1017.6);
   assert.equal(s.movedToSavings, 300);
   assert.equal(s.netWorth, 1200 + 5000 - 410);
+  assert.equal(s.cardPayments, 500);       // shown on its own, not added to spending
+  assert.equal(s.cardsOwed, 410);
   assert.equal(s.trend.length, 6);
   assert.equal(s.categories[0].category, "RENT_AND_UTILITIES");
 

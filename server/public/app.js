@@ -85,6 +85,8 @@
     $("#sSaved").textContent = money(s.saved);
     $("#sRate").textContent = s.income ? `${Math.round((s.saved / s.income) * 100)}% of income` : `${money(s.movedToSavings)} to savings`;
     $("#sNet").textContent = money(s.netWorth);
+    $("#sCards").textContent = money(s.cardPayments);
+    $("#sOwed").textContent = money(s.cardsOwed);
     $("#editLimits").textContent = editing ? "Done" : "Set limits";
 
     if (!s.categories.length) $("#cats").innerHTML = `<p class="muted">No spending in ${esc(monthName(month))} yet. Link a bank on the Accounts tab.</p>`;

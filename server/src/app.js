@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { CountryCode, Products } from "plaid";
 import { syncAll, syncItem } from "./sync.js";
-import { monthSummary, netWorth, shiftMonth, classifiedMonth, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
+import { monthSummary, netWorth, cardsOwed, shiftMonth, classifiedMonth, CATEGORY_LABELS, KIND_LABELS, COUNTED_KINDS } from "./summary.js";
 
 const MONTH = /^\d{4}-\d{2}$/;
 
@@ -93,7 +93,7 @@ export function makeApp({ db, plaid, sealer, appToken, plaidEnv = "sandbox" }) {
       const s = await monthSummary(db, shiftMonth(month, n), opts);
       return { month: s.month, spent: s.spent, saved: s.saved };
     }));
-    res.json({ ...(await monthSummary(db, month, opts)), trend, netWorth: await netWorth(db, opts) });
+    res.json({ ...(await monthSummary(db, month, opts)), trend, netWorth: await netWorth(db, opts), cardsOwed: await cardsOwed(db, opts) });
   }));
 
   app.get("/api/transactions", wrap(async (req, res) => {

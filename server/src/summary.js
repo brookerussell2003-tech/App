@@ -85,7 +85,7 @@ export async function classifiedMonth(db, month, opts) {
 
 export async function monthSummary(db, month, opts) {
   const txs = await classifiedMonth(db, month, opts);
-  let income = 0, spent = 0, movedToSavings = 0;
+  let income = 0, spent = 0, movedToSavings = 0, paidFromBanks = 0, paidOnCards = 0;
   const byCategory = {};
   const savingsLike = (t) => ["savings", "money market", "cd", "hsa"].includes(t.account_subtype);
   for (const t of txs) {
@@ -95,20 +95,30 @@ export async function monthSummary(db, month, opts) {
       const c = t.category ?? "OTHER";
       byCategory[c] = (byCategory[c] ?? 0) + t.amount;
     } else if (t.kind === "transfer" && t.amount < 0 && savingsLike(t)) movedToSavings += -t.amount;
+    else if (t.kind === "card_payment") {
+      if (t.account_type === "credit") paidOnCards += -t.amount; else paidFromBanks += t.amount;
+    }
   }
+  // Each payment shows up on the bank side, the card side, or both; take the fuller side so it's counted once.
+  const cardPayments = Math.max(paidFromBanks, paidOnCards);
   const round = (n) => Math.round(n * 100) / 100;
   const limits = Object.fromEntries((await db.prepare("SELECT category, monthly_limit FROM budgets").all()).map((b) => [b.category, b.monthly_limit]));
   const categories = Object.keys({ ...byCategory, ...limits })
     .map((c) => ({ category: c, label: CATEGORY_LABELS[c] ?? c, spent: round(Math.max(0, byCategory[c] ?? 0)), limit: limits[c] ?? null }))
     .filter((c) => c.spent > 0 || c.limit)
     .sort((a, b) => b.spent - a.spent);
-  return { month, income: round(income), spent: round(Math.max(0, spent)), saved: round(income - Math.max(0, spent)), movedToSavings: round(movedToSavings), categories };
+  return { month, income: round(income), spent: round(Math.max(0, spent)), saved: round(income - Math.max(0, spent)), movedToSavings: round(movedToSavings), cardPayments: round(cardPayments), categories };
 }
 
 export function shiftMonth(month, n) {
   const [y, m] = month.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + n, 1));
   return d.toISOString().slice(0, 7);
+}
+
+export async function cardsOwed(db, { testItems = new Set() } = {}) {
+  const rows = (await db.prepare("SELECT item_id, current FROM accounts WHERE type = 'credit'").all()).filter((a) => !testItems.has(a.item_id));
+  return Math.round(rows.reduce((s, a) => s + (a.current ?? 0), 0) * 100) / 100;
 }
 
 export async function netWorth(db, { testItems = new Set() } = {}) {
