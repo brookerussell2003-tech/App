@@ -15,13 +15,17 @@
   function notice(msg) { $("#notice").textContent = msg ?? ""; $("#notice").hidden = !msg; }
 
   async function api(path, { method = "GET", body } = {}) {
-    const res = await fetch(path, {
-      method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetch(path, {
+        method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch { throw new Error("Couldn't reach the server. Check your internet connection."); }
     const json = await res.json().catch(() => ({}));
     if (res.status === 401) { lock("That password didn't match. Try again."); throw new Error("locked"); }
-    if (!res.ok) throw new Error(json.error ?? `The server answered ${res.status}`);
+    // A crash before the app starts comes back as a plain error page; point to the host's logs.
+    if (!res.ok) throw new Error(json.error ?? `The server had a problem (error ${res.status}). Check the Logs tab in Vercel for the reason.`);
     return json;
   }
 
@@ -34,7 +38,13 @@
   $("#loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     token = $("#token").value.trim();
-    try { await api("/api/accounts"); } catch { return; }
+    const btn = e.submitter ?? $("#loginForm button");
+    btn.disabled = true; btn.textContent = "Checking…"; $("#loginError").hidden = true;
+    try { await api("/api/accounts"); }
+    catch (err) {
+      if (err.message !== "locked") { $("#loginError").textContent = err.message; $("#loginError").hidden = false; }
+      return;
+    } finally { btn.disabled = false; btn.textContent = "Unlock"; }
     try { localStorage.setItem("moneybook-token", token); } catch {}
     $("#token").value = ""; $("#login").hidden = true; $("#app").hidden = false; load();
   });
