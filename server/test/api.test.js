@@ -1,0 +1,119 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { makeApp } from "../src/app.js";
+import { openDb } from "../src/db.js";
+import { makeSealer } from "../src/crypto.js";
+
+const month = new Date().toISOString().slice(0, 7);
+const d = (day) => `${month}-${String(day).padStart(2, "0")}`;
+const pfc = (primary, detailed = primary + "_OTHER") => ({ primary, detailed });
+
+// Stands in for Plaid so the tests run without keys. Mirrors the response shapes the server reads.
+function fakePlaid() {
+  const calls = [];
+  const pages = [
+    {
+      added: [
+        { transaction_id: "t1", account_id: "chk", date: d(1), name: "ACME PAYROLL", amount: -2500, personal_finance_category: pfc("INCOME", "INCOME_WAGES") },
+        { transaction_id: "t2", account_id: "card", date: d(2), name: "Trader Joe's", merchant_name: "Trader Joe's", amount: 82.4, personal_finance_category: pfc("FOOD_AND_DRINK", "FOOD_AND_DRINK_GROCERIES") },
+        { transaction_id: "t3", account_id: "chk", date: d(3), name: "Rent", amount: 1400, personal_finance_category: pfc("RENT_AND_UTILITIES", "RENT_AND_UTILITIES_RENT") },
+      ],
+      modified: [], removed: [], next_cursor: "c1", has_more: true,
+    },
+    {
+      added: [
+        { transaction_id: "t4", account_id: "chk", date: d(4), name: "Card payment", amount: 500, personal_finance_category: pfc("LOAN_PAYMENTS", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT") },
+        { transaction_id: "t5", account_id: "sav", date: d(4), name: "Transfer from checking", amount: -300, personal_finance_category: pfc("TRANSFER_IN", "TRANSFER_IN_ACCOUNT_TRANSFER") },
+        { transaction_id: "t6", account_id: "chk", date: d(4), name: "Transfer to savings", amount: 300, personal_finance_category: pfc("TRANSFER_OUT", "TRANSFER_OUT_ACCOUNT_TRANSFER") },
+      ],
+      modified: [], removed: [], next_cursor: "c2", has_more: false,
+    },
+  ];
+  return {
+    calls,
+    linkTokenCreate: async (req) => (calls.push(["link", req]), { data: { link_token: "link-sandbox-123" } }),
+    itemPublicTokenExchange: async () => ({ data: { item_id: "item1", access_token: "access-sandbox-secret" } }),
+    accountsGet: async (req) => (calls.push(["accounts", req.access_token]), { data: { accounts: [
+      { account_id: "chk", name: "Checking", mask: "0000", type: "depository", subtype: "checking", balances: { current: 1200, available: 1150, iso_currency_code: "USD" } },
+      { account_id: "sav", name: "Savings", mask: "1111", type: "depository", subtype: "savings", balances: { current: 5000, iso_currency_code: "USD" } },
+      { account_id: "card", name: "Visa", mask: "3333", type: "credit", subtype: "credit card", balances: { current: 410, iso_currency_code: "USD" } },
+    ] } }),
+    transactionsSync: async (req) => (calls.push(["sync", req.cursor]), { data: pages[req.cursor === "c1" ? 1 : 0] }),
+    itemRemove: async () => ({ data: {} }),
+  };
+}
+
+async function start() {
+  const db = openDb();
+  const plaid = fakePlaid();
+  const app = makeApp({ db, plaid, sealer: makeSealer(randomBytes(32).toString("base64")), appToken: "test-token" });
+  const server = app.listen(0);
+  await new Promise((r) => server.once("listening", r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const call = (path, opts = {}) => fetch(base + path, { ...opts, headers: { authorization: "Bearer test-token", "content-type": "application/json", ...opts.headers } })
+    .then(async (r) => ({ status: r.status, body: await r.json() }));
+  return { db, plaid, server, call };
+}
+
+test("rejects requests without the app token", async (t) => {
+  const { server, call } = await start(); t.after(() => server.close());
+  const r = await call("/api/accounts", { headers: { authorization: "Bearer nope" } });
+  assert.equal(r.status, 401);
+});
+
+test("links a bank, syncs every page, and summarizes the month", async (t) => {
+  const { db, plaid, server, call } = await start(); t.after(() => server.close());
+
+  assert.equal((await call("/api/link-token", { method: "POST" })).body.linkToken, "link-sandbox-123");
+
+  const ex = await call("/api/exchange", { method: "POST", body: JSON.stringify({ publicToken: "public-sandbox", institution: "Chase" }) });
+  assert.equal(ex.status, 200);
+  assert.equal(ex.body.added, 6);
+  assert.deepEqual(plaid.calls.filter((c) => c[0] === "sync").map((c) => c[1]), [undefined, "c1"]);
+
+  // Access token is stored encrypted, not in plain text.
+  const stored = db.prepare("SELECT access_token, cursor FROM items").get();
+  assert.ok(!stored.access_token.includes("access-sandbox-secret"));
+  assert.equal(stored.cursor, "c2");
+  assert.equal(plaid.calls.find((c) => c[0] === "accounts")[1], "access-sandbox-secret");
+
+  const s = (await call(`/api/summary?month=${month}`)).body;
+  assert.equal(s.income, 2500);
+  assert.equal(s.spent, 1482.4);           // groceries + rent; card payment and transfers excluded
+  assert.equal(s.saved, 1017.6);
+  assert.equal(s.movedToSavings, 300);
+  assert.equal(s.netWorth, 1200 + 5000 - 410);
+  assert.equal(s.trend.length, 6);
+  assert.equal(s.categories[0].category, "RENT_AND_UTILITIES");
+
+  await call("/api/budgets/FOOD_AND_DRINK", { method: "PUT", body: JSON.stringify({ monthlyLimit: 400 }) });
+  const food = (await call(`/api/summary?month=${month}`)).body.categories.find((c) => c.category === "FOOD_AND_DRINK");
+  assert.deepEqual([food.spent, food.limit], [82.4, 400]);
+
+  const tx = (await call(`/api/transactions?month=${month}`)).body.transactions;
+  assert.equal(tx.length, 6);
+  assert.equal(tx.find((x) => x.id === "t2").account, "Visa");
+
+  const accts = (await call("/api/accounts")).body;
+  assert.equal(accts.banks[0].institution, "Chase");
+  assert.equal(accts.accounts.length, 3);
+
+  assert.equal((await call("/api/banks/item1", { method: "DELETE" })).status, 200);
+  assert.equal((await call("/api/accounts")).body.accounts.length, 0);
+});
+
+test("rejects a malformed month", async (t) => {
+  const { server, call } = await start(); t.after(() => server.close());
+  assert.equal((await call("/api/summary?month=oct")).status, 400);
+});
+
+test("serves the web app without the password, but not its data", async (t) => {
+  const { server, call } = await start(); t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await fetch(base + "/");
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /<title>Money Book<\/title>/);
+  assert.equal((await fetch(base + "/manifest.webmanifest")).status, 200);
+  assert.equal((await fetch(base + "/api/summary")).status, 401);
+});
