@@ -1,6 +1,12 @@
 // Vercel runs this as a serverless function. vercel.json sends /api/* and /health here;
 // the web app in public/ is served by Vercel directly.
 let app;
+// Plain Node response helpers, so this works with or without Vercel's res.status()/res.json().
+const send = (res, code, body) => {
+  res.statusCode = code;
+  res.setHeader("content-type", "application/json");
+  res.end(JSON.stringify(body));
+};
 const SETTINGS = ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_ENV", "APP_TOKEN", "ENCRYPTION_KEY", "DATABASE_URL", "DATABASE_AUTH_TOKEN"];
 
 export default async function handler(req, res) {
@@ -10,10 +16,10 @@ export default async function handler(req, res) {
     try {
       const { buildApp } = await import("../src/setup.js");
       app ??= await buildApp();
-      return res.status(200).json({ ok: true, settings });
+      return send(res, 200, { ok: true, settings });
     } catch (err) {
       app = undefined;
-      return res.status(200).json({ ok: false, error: err.message, settings });
+      return send(res, 200, { ok: false, error: err.message, settings });
     }
   }
   try {
@@ -23,7 +29,7 @@ export default async function handler(req, res) {
   } catch (err) {
     app = undefined;
     console.error(err);
-    return res.status(500).json({ error: err.message });
+    return send(res, 500, { error: err.message });
   }
   return app(req, res);
 }

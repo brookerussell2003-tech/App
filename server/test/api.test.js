@@ -132,7 +132,10 @@ test("the Vercel entry point builds the app from environment variables", async (
   t.after(() => server.close());
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${server.address().port}`;
-  assert.equal((await fetch(base + "/health")).status, 200);
+  const health = await (await fetch(base + "/health")).json();
+  assert.equal(health.ok, true);
+  assert.equal(health.settings.PLAID_SECRET, "set");
+  assert.ok(!JSON.stringify(health).includes("secret"));
   const s = await fetch(base + `/api/summary?month=${month}`, { headers: { authorization: "Bearer pw" } });
   assert.equal(s.status, 200);
   assert.equal((await s.json()).spent, 0);
